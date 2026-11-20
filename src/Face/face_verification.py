@@ -1,5 +1,6 @@
 
 from pathlib import Path
+from io import BytesIO
 
 import joblib
 import numpy as np
@@ -54,6 +55,27 @@ print(f"Number of Features: {len(feature_columns)}")
 
 
 # ==========================================
+# Convert Background Removal Output
+# ==========================================
+
+def ensure_pil_image(image_output):
+
+    if isinstance(image_output, bytes):
+
+        image_output = Image.open(
+            BytesIO(image_output)
+        )
+
+    if not isinstance(image_output, Image.Image):
+
+        raise TypeError(
+            f"Expected PIL Image or bytes, got {type(image_output)}"
+        )
+
+    return image_output.convert("RGB")
+
+
+# ==========================================
 # Face Feature Preparation
 # ==========================================
 
@@ -76,6 +98,7 @@ def prepare_face_features(face_crop):
 
     # 4. Feature Validation
     if len(combined_features) != len(feature_columns):
+
         raise ValueError(
             "Feature count does not match the trained model."
         )
@@ -95,6 +118,45 @@ def prepare_face_features(face_crop):
 
 
 # ==========================================
+# Face Recognition Confidence Configuration
+# ==========================================
+
+FACE_CONFIDENCE_THRESHOLD = 0.60
+
+
+# ==========================================
+# Prediction Utilities
+# ==========================================
+
+def predict_user_with_confidence(scaled_features):
+
+    if not getattr(svm_model, "probability", False):
+
+        raise RuntimeError(
+            "SVM probability estimation is unavailable. "
+            "Retrain the model with probability=True."
+        )
+
+    probabilities = svm_model.predict_proba(
+        scaled_features
+    )[0]
+
+    class_index = int(np.argmax(probabilities))
+
+    predicted_user = svm_model.classes_[class_index]
+
+    confidence = float(probabilities[class_index])
+
+    recognized_user = predicted_user
+
+    if confidence < FACE_CONFIDENCE_THRESHOLD:
+
+        recognized_user = "UNKNOWN"
+
+    return recognized_user, confidence, predicted_user
+
+
+# ==========================================
 # Face Verification - Static Image
 # ==========================================
 
@@ -103,17 +165,30 @@ def verify_face(image_path, background_session):
     image_path = Path(image_path)
 
     if not image_path.is_file():
+
         raise FileNotFoundError(
             f"Input image not found: {image_path}"
         )
 
-    # 1. Load Input Image
+    # 1. Load Original Input Image
     image = Image.open(image_path).convert("RGB")
 
+    print("\n========== IMAGE DIAGNOSTICS ==========")
+    print("Original Image Size:", image.size)
+
     # 2. Background Removal
-    background_removed_image = remove_background(
+    background_removed_output = remove_background(
         image,
         background_session
+    )
+
+    background_removed_image = ensure_pil_image(
+        background_removed_output
+    )
+
+    print(
+        "Background Removed Image Size:",
+        background_removed_image.size
     )
 
     # 3. Image Resizing
@@ -121,15 +196,26 @@ def verify_face(image_path, background_session):
         background_removed_image
     )
 
+    print(
+        "Resized Image Size:",
+        resized_image.size
+    )
+
     # 4. Face Detection
+    print("\nTesting RetinaFace on RESIZED image...")
+
     detections = detect_face(resized_image)
 
+    print("Resized Image Detections:", len(detections))
+
     if len(detections) == 0:
+
         raise ValueError(
             "No face detected in the input image."
         )
 
     if len(detections) > 1:
+
         raise ValueError(
             f"Multiple faces detected: {len(detections)}. "
             "Expected exactly one face."
@@ -148,22 +234,24 @@ def verify_face(image_path, background_session):
         face_crop
     )
 
-    # 7. SVM Prediction
-    predicted_user = svm_model.predict(
-        scaled_features
-    )[0]
-
-    # 8. SVM Decision Function
-    decision_score = float(
-        svm_model.decision_function(
+    # 7. Prediction + Confidence
+    recognized_user, confidence, predicted_user = (
+        predict_user_with_confidence(
             scaled_features
-        )[0]
+        )
     )
 
+    print("\n========== PREDICTION RESULT ==========")
     print("Predicted Identity:", predicted_user)
-    print("Decision Score:", decision_score)
+    print("Recognized Identity:", recognized_user)
+    print("Confidence:", confidence)
 
-    return predicted_user
+    return (
+        recognized_user,
+        confidence,
+        predicted_user,
+        "FACE_DETECTED"
+    )
 
 
 # ==========================================
@@ -182,9 +270,13 @@ def recognize_face_frame(frame, background_session):
     original_width, original_height = image.size
 
     # 2. Background Removal
-    background_removed_image = remove_background(
+    background_removed_output = remove_background(
         image,
         background_session
+    )
+
+    background_removed_image = ensure_pil_image(
+        background_removed_output
     )
 
     # 3. Image Resizing
@@ -196,9 +288,11 @@ def recognize_face_frame(frame, background_session):
     detections = detect_face(resized_image)
 
     if len(detections) == 0:
+
         return None, None, None, "NO_FACE"
 
     if len(detections) > 1:
+
         return None, None, None, "MULTIPLE_FACES"
 
     # 5. Get Face Detection Data
@@ -228,21 +322,16 @@ def recognize_face_frame(frame, background_session):
         face_crop
     )
 
-    # 9. SVM Prediction
-    predicted_user = svm_model.predict(
-        scaled_features
-    )[0]
-
-    # 10. SVM Decision Function
-    decision_score = float(
-        svm_model.decision_function(
+    # 9. Prediction + Confidence
+    recognized_user, confidence, _ = (
+        predict_user_with_confidence(
             scaled_features
-        )[0]
+        )
     )
 
     return (
-        predicted_user,
-        decision_score,
+        recognized_user,
+        confidence,
         bbox,
         "FACE_DETECTED"
     )
@@ -260,11 +349,16 @@ def display_svm_configuration():
     print("Model Type:", type(svm_model).__name__)
     print("Kernel:", svm_model.kernel)
     print("Classes:", svm_model.classes_)
+
     print(
         "Decision Function Shape:",
         svm_model.decision_function_shape
     )
-    print("Number of Support Vectors:", svm_model.n_support_)
+
+    print(
+        "Number of Support Vectors:",
+        svm_model.n_support_
+    )
 
 
 # ==========================================
@@ -274,24 +368,25 @@ def display_svm_configuration():
 if __name__ == "__main__":
 
     TEST_IMAGE_PATH = (
-        PROJECT_PATH
-        / "Dataset"
-        / "Raw"
-        / "Face"
-        / "User_01"
-        / "User_01_001.jpg"
+        r"E:\supervised-task2-main\supervised-task2-main"
+        r"\data\raw\others\public_01\face\olivetti_01.png"
     )
 
     background_session = initialize_background_removal()
 
-    predicted_user = verify_face(
+    recognized_user, confidence, predicted_user, status = verify_face(
         TEST_IMAGE_PATH,
         background_session
     )
 
-    print("\nFace Verification Completed.")
-    print("------------------------------------------")
-    print("Input Image:", TEST_IMAGE_PATH.name)
+    print("\n==========================================")
+    print("FACE VERIFICATION RESULT")
+    print("==========================================")
+    print("Input Image:", Path(TEST_IMAGE_PATH).name)
+    print("Status:", status)
     print("Predicted Identity:", predicted_user)
+    print("Recognized Identity:", recognized_user)
+    print("Confidence:", confidence)
+    print("==========================================")
 
     display_svm_configuration()

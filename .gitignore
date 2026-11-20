@@ -1,0 +1,132 @@
+
+# ==========================================
+# 1. Datasets
+# ==========================================
+
+# Ignore all dataset contents
+/Dataset/**
+
+# Keep folder structure
+!/Dataset/Raw/
+!/Dataset/Processed/
+
+!/Dataset/Raw/**/
+!/Dataset/Processed/**/
+
+# Allow .gitkeep files only
+!/Dataset/Raw/**/.gitkeep
+!/Dataset/Processed/**/.gitkeep
+
+
+# ==========================================
+# 2. Trained Models and Model Weights
+# ==========================================
+
+/Models/
+
+*.joblib
+*.pkl
+*.pickle
+*.model
+*.onnx
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+
+
+# ==========================================
+# 3. Personal Images and Audio
+# ==========================================
+
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.webp
+
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+
+
+# ==========================================
+# 4. Sensitive Information
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+secrets/
+credentials/
+private_keys/
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+
+# ==========================================
+# 5. Local Machine Configuration
+# ==========================================
+
+*.log
+*.tmp
+*.temp
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.vscode/
+.idea/
+
+
+# ==========================================
+# 6. Python Environment
+# ==========================================
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+
+
+# ==========================================
+# 7. Jupyter Temporary Files
+# ==========================================
+
+.ipynb_checkpoints/
+
+
+# ==========================================
+# 8. Model and Processing Caches
+# ==========================================
+
+.deepface/
+rembg_models/
+.cache/
+
+
+# ==========================================
+# 9. Temporary Captures
+# ==========================================
+
+temp/
+tmp/
+captures/
+outputs/

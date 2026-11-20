@@ -24,7 +24,7 @@ PROCESS_INTERVAL = 1.0
 
 recognition_state = {
     "predicted_user": None,
-    "decision_score": None,
+    "confidence": None,
     "bbox": None,
     "status": "WAITING",
     "error": None
@@ -48,12 +48,12 @@ def process_frame(frame, background_session):
             background_session
         )
 
-        predicted_user, decision_score, bbox, status = result
+        predicted_user, confidence, bbox, status = result
 
         with state_lock:
 
             recognition_state["predicted_user"] = predicted_user
-            recognition_state["decision_score"] = decision_score
+            recognition_state["confidence"] = confidence
             recognition_state["bbox"] = bbox
             recognition_state["status"] = status
             recognition_state["error"] = None
@@ -63,7 +63,7 @@ def process_frame(frame, background_session):
         with state_lock:
 
             recognition_state["predicted_user"] = None
-            recognition_state["decision_score"] = None
+            recognition_state["confidence"] = None
             recognition_state["bbox"] = None
             recognition_state["status"] = "ERROR"
             recognition_state["error"] = str(error)
@@ -82,6 +82,7 @@ def draw_recognition_results(frame):
     with state_lock:
 
         predicted_user = recognition_state["predicted_user"]
+        confidence = recognition_state["confidence"]
         bbox = recognition_state["bbox"]
         status = recognition_state["status"]
         error = recognition_state["error"]
@@ -93,7 +94,13 @@ def draw_recognition_results(frame):
 
         color = (0, 255, 0)
 
-        label = f"Recognized: {predicted_user}"
+        if confidence is None:
+            label = f"Recognized: {predicted_user}"
+        else:
+            label = (
+                f"Recognized: {predicted_user} "
+                f"({confidence:.2f})"
+            )
 
         cv2.rectangle(
             frame,
